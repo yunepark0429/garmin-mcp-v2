@@ -441,6 +441,55 @@ def get_power_curve(start_date: str, end_date: str) -> dict[str, Any]:
 
 
 @mcp.tool
+def get_training_load_activities(
+    start_date: str,
+    end_date: str,
+    activity_type: str | None = None,
+) -> list[dict[str, Any]]:
+    return garmin().get_training_load_activities(
+        start_date, end_date, activitytype=activity_type
+    )
+
+
+@mcp.tool
+def get_endurance_score(
+    start_date: str,
+    end_date: str | None = None,
+    aggregation: str = "daily",
+) -> dict[str, Any]:
+    return garmin().get_endurance_score(start_date, end_date, aggregation=aggregation)
+
+
+@mcp.tool
+def get_heat_altitude_acclimation(day: str | None = None) -> dict[str, Any]:
+    return garmin().get_heat_altitude_acclimation(_iso(day))
+
+
+@mcp.tool
+def get_cycling_stamina_curve(day: str | None = None) -> dict[str, Any]:
+    return garmin().get_stamina_curve(_iso(day), sport_type="cycling")
+
+
+@mcp.tool
+def get_cycling_ability_range(
+    start_date: str,
+    end_date: str,
+    aggregation: str = "DAILY",
+) -> dict[str, Any]:
+    return garmin().get_cycling_ability_range(
+        start_date, end_date, aggregation=aggregation
+    )
+
+
+@mcp.tool
+def get_vo2max_history(
+    start_date: str,
+    end_date: str,
+) -> dict[str, Any]:
+    return garmin().get_max_metrics_range(start_date, end_date)
+
+
+@mcp.tool
 def get_training_analysis_bundle(day: str | None = None) -> dict[str, Any]:
     d = _iso(day)
     c = garmin()
@@ -454,6 +503,9 @@ def get_training_analysis_bundle(day: str | None = None) -> dict[str, Any]:
         "four_week_load_balance": _safe_optional(c.get_training_four_week_load_balance, d),
         "max_metrics": _safe_optional(c.get_max_metrics_latest, d),
         "cycling_ability": _safe_optional(c.get_cycling_ability, d),
+        "endurance_score": _safe_optional(c.get_endurance_score, d, d, aggregation="daily"),
+        "heat_altitude_acclimation": _safe_optional(c.get_heat_altitude_acclimation, d),
+        "cycling_stamina_curve": _safe_optional(c.get_stamina_curve, d, sport_type="cycling"),
     }
 
 
