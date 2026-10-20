@@ -457,7 +457,44 @@ def get_training_analysis_bundle(day: str | None = None) -> dict[str, Any]:
     }
 
 
+def _startup_selftest() -> None:
+    """Verify Garmin auth and the detailed cycling data path without logging personal data."""
+    if os.environ.get("GARMIN_STARTUP_SELFTEST") != "1":
+        return
+    try:
+        c = garmin()
+        activities = c.get_activities(0, 1)
+        if not activities:
+            log.info("GARMIN_SELFTEST_OK auth=true recent_activity=false")
+            return
+        activity_id = str(
+            activities[0].get("activityId")
+            or activities[0].get("activity_id")
+            or activities[0].get("id")
+        )
+        if not activity_id or activity_id == "None":
+            raise RuntimeError("Recent activity did not contain an activity id")
+        detail = c.get_activity_details(activity_id, maxchart=10000, maxpoly=0)
+        laps = c.get_activity_laps(activity_id)
+        try:
+            power_curve = c.get_activity_power_curve(activity_id)
+            power_curve_ok = power_curve is not None
+        except Exception:
+            power_curve_ok = False
+        detail_ok = isinstance(detail, dict) and bool(detail)
+        laps_ok = isinstance(laps, dict) and bool(laps)
+        log.info(
+            "GARMIN_SELFTEST_OK auth=true recent_activity=true detail=%s laps=%s power_curve=%s",
+            detail_ok,
+            laps_ok,
+            power_curve_ok,
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.error("GARMIN_SELFTEST_FAILED %s", type(exc).__name__)
+
+
 if __name__ == "__main__":
+    _startup_selftest()
     port = int(os.environ.get("PORT", 8000))
     host = os.environ.get("HOST", "0.0.0.0")
     path = os.environ.get("MCP_PATH", "/mcp")
