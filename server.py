@@ -490,6 +490,51 @@ def get_vo2max_history(
 
 
 @mcp.tool
+def get_training_history_bundle(
+    start_date: str,
+    end_date: str,
+) -> dict[str, Any]:
+    """Longitudinal cycling/training metrics for analysis, with independent errors per source."""
+    c = garmin()
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "ftp_history": _safe_optional(
+            c.get_functional_threshold_power_range,
+            start_date,
+            end_date,
+            sport="CYCLING",
+            aggregation="daily",
+        ),
+        "vo2max_history": _safe_optional(c.get_max_metrics_range, start_date, end_date),
+        "cycling_ability_history": _safe_optional(
+            c.get_cycling_ability_range, start_date, end_date, aggregation="DAILY"
+        ),
+        "power_curve": _safe_optional(
+            c.get_power_curve, start_date, end_date, sport="cycling"
+        ),
+        "training_load_activities": _safe_optional(
+            c.get_training_load_activities, start_date, end_date
+        ),
+        "weekly_training_status": _safe_optional(
+            c.get_weekly_training_status, start_date, end_date
+        ),
+        "heat_altitude_history": _safe_optional(
+            c.get_heat_altitude_acclimation_range,
+            start_date,
+            end_date,
+            aggregation="daily",
+        ),
+        "endurance_score_history": _safe_optional(
+            c.get_endurance_score,
+            start_date,
+            end_date,
+            aggregation="daily",
+        ),
+    }
+
+
+@mcp.tool
 def get_training_analysis_bundle(day: str | None = None) -> dict[str, Any]:
     d = _iso(day)
     c = garmin()
