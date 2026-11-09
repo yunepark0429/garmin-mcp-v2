@@ -23,6 +23,7 @@ from garminconnect import (
 )
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
+from fit_quality import audit_fit_bytes
 
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 log = logging.getLogger("garmin-mcp")
@@ -454,6 +455,18 @@ def download_activity_original_b64(activity_id: str) -> dict[str, Any]:
         "content_b64": base64.b64encode(raw).decode("ascii"),
         "byte_length": len(raw),
     }
+
+
+@mcp.tool
+def get_activity_fit_timebase_quality(activity_id: str) -> dict[str, Any]:
+    """Verify an activity's FIT timer events and average-power zero policy.
+
+    Returns source-backed metrics without modifying the original FIT or
+    replacing Garmin's official session values.
+    """
+    client = garmin()
+    raw = client.download_activity(activity_id, client.ActivityDownloadFormat.ORIGINAL)
+    return audit_fit_bytes(raw, activity_id)
 
 
 # ---------- Training / cycling analytics ----------
