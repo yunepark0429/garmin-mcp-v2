@@ -587,7 +587,22 @@ def _startup_selftest() -> None:
             power_curve_ok,
         )
     except Exception as exc:  # noqa: BLE001
-        log.error("GARMIN_SELFTEST_FAILED %s", type(exc).__name__)
+        detail = str(exc).lower()
+        if "mfa" in detail:
+            category = "mfa_required"
+        elif "401" in detail or "authentication" in detail or "social profile" in detail:
+            category = "authentication_rejected"
+        elif "rate-limited" in detail or "429" in detail:
+            category = "rate_limited"
+        else:
+            category = "other"
+        log.error(
+            "GARMIN_SELFTEST_FAILED %s kind=%s credentials_configured=%s token_bootstrap_configured=%s",
+            type(exc).__name__,
+            category,
+            bool(os.environ.get("GARMIN_EMAIL") and os.environ.get("GARMIN_PASSWORD")),
+            bool(os.environ.get("GARMINTOKENS_BASE64")),
+        )
 
 
 if __name__ == "__main__":
