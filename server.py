@@ -50,7 +50,8 @@ _client: Garmin | None = None
 _client_lock = threading.Lock()
 
 
-def garmin() -> Garmin:
+def _raw_garmin() -> Garmin:
+    """Return a shared Garmin client; construct it under a single lock."""
     global _client
     if _client is not None:
         return _client
@@ -58,15 +59,18 @@ def garmin() -> Garmin:
         if _client is not None:
             return _client
 
-        _bootstrap_tokenstore_from_env()
-        have_tokens = os.path.isdir(TOKENSTORE) and bool(os.listdir(TOKENSTORE))
-
         email = os.environ.get("GARMIN_EMAIL")
         password = os.environ.get("GARMIN_PASSWORD")
+        # The bundled token archive is an immutable bootstrap snapshot. If
+        # credentials are available, prefer a fresh login when no live cache
+        # exists instead of restoring a repeatedly rejected old snapshot.
+        if not (email and password):
+            _bootstrap_tokenstore_from_env()
+        have_tokens = os.path.isdir(TOKENSTORE) and bool(os.listdir(TOKENSTORE))
         if not have_tokens and (not email or not password):
             raise RuntimeError(
-                "No Garmin tokenstore found. Set GARMINTOKENS_BASE64, "
-                "or set both GARMIN_EMAIL and GARMIN_PASSWORD."
+                "No valid Garmin login method configured. Set GARMIN_EMAIL and "
+                "GARMIN_PASSWORD or provide GARMINTOKENS_BASE64."
             )
 
         def _no_mfa() -> str:
@@ -85,8 +89,55 @@ def garmin() -> Garmin:
             raise RuntimeError(f"Garmin connection error: {exc}") from exc
 
         _client = client
-        return _client
+        return client
 
+
+def _is_auth_rejection(exc: Exception) -> bool:
+    if isinstance(exc, GarminConnectAuthenticationError):
+        return True
+    message = str(exc).lower()
+    return (
+        "401" in message
+        or "failed to retrieve social profile" in message
+        or ("token" in message and ("expired" in message or "rejected" in message))
+    )
+
+
+class _ResilientGarminProxy:
+    """Re-authenticate once when a cached Garmin session expires mid-run."""
+
+    def __getattr__(self, name: str) -> Any:
+        initial = _raw_garmin()
+        attribute = getattr(initial, name)
+        if not callable(attribute):
+            return attribute
+
+        def call(*args: Any, **kwargs: Any) -> Any:
+            global _client
+            active = _raw_garmin()
+            try:
+                return getattr(active, name)(*args, **kwargs)
+            except Exception as exc:
+                if not _is_auth_rejection(exc):
+                    raise
+                with _client_lock:
+                    if _client is active:
+                        _client = None
+                log.warning(
+                    "Garmin cached session rejected; retrying %s once after login",
+                    name,
+                )
+                return getattr(_raw_garmin(), name)(*args, **kwargs)
+
+        return call
+
+
+_garmin_proxy = _ResilientGarminProxy()
+
+
+def garmin() -> Any:
+    """Keep existing MCP tool behavior while recovering one expired session."""
+    return _garmin_proxy
 
 def _iso(day: str | None) -> str:
     return day or date.today().isoformat()
