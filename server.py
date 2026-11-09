@@ -697,69 +697,8 @@ def _startup_selftest() -> None:
         )
 
 
-def _historical_source_probe() -> None:
-    """One-time opt-in recovery verification; logs presence only, no health values."""
-    requested = os.environ.get("GARMIN_HISTORICAL_PROBE", "").split(",")
-    if len(requested) != 2:
-        return
-    try:
-        day_stats, day_body = [date.fromisoformat(x.strip()).isoformat() for x in requested]
-        c = garmin()
-    except Exception as exc:
-        log.error("GARMIN_HISTORY_PROBE_INIT_FAILED kind=%s", type(exc).__name__)
-        return
-    for kind, d, getter in (
-        ("daily", day_stats, c.get_stats),
-        ("body_composition", day_body, c.get_body_composition),
-    ):
-        try:
-            data = getter(d)
-            if not isinstance(data, dict):
-                log.info(
-                    "GARMIN_HISTORY_PROBE kind=%s date=%s response_type=%s has_data=%s",
-                    kind, d, type(data).__name__, bool(data),
-                )
-                continue
-            if kind == "daily":
-                numeric_fields = (
-                    "totalSteps", "restingHeartRate", "minHeartRate",
-                    "maxHeartRate", "averageStressLevel", "sleepingSeconds",
-                    "bodyBatteryMostRecentValue", "wellnessDistanceMeters",
-                )
-                present = [k for k in numeric_fields if data.get(k) is not None]
-                log.info(
-                    "GARMIN_HISTORY_PROBE kind=%s date=%s response=dict present_fields=%s",
-                    kind, d, ",".join(present) or "NONE",
-                )
-                log.info(
-                    "GARMIN_HISTORY_PROBE_DETAIL kind=%s date=%s wellness=%s activity=%s steps=%s min_hr=%s max_hr=%s sleep_s=%s walk_m=%s",
-                    kind, d, data.get("includesWellnessData"), data.get("includesActivityData"),
-                    data.get("totalSteps"), data.get("minHeartRate"), data.get("maxHeartRate"),
-                    data.get("sleepingSeconds"), data.get("wellnessDistanceMeters"),
-                )
-            else:
-                weight_list = data.get("dateWeightList")
-                if not isinstance(weight_list, list):
-                    weight_list = []
-                average = data.get("totalAverage") or {}
-                measures = [
-                    k for k in ("weight", "bmi", "bodyFat", "bodyWater", "muscleMass")
-                    if isinstance(average, dict) and average.get(k) is not None
-                ]
-                log.info(
-                    "GARMIN_HISTORY_PROBE kind=%s date=%s response=dict readings=%d average_fields=%s",
-                    kind, d, len(weight_list), ",".join(measures) or "NONE",
-                )
-        except Exception as exc:
-            log.warning(
-                "GARMIN_HISTORY_PROBE kind=%s date=%s error_type=%s",
-                kind, d, type(exc).__name__,
-            )
-
-
 if __name__ == "__main__":
     _startup_selftest()
-    _historical_source_probe()
     port = int(os.environ.get("PORT", 8000))
     host = os.environ.get("HOST", "0.0.0.0")
     path = os.environ.get("MCP_PATH", "/mcp")
