@@ -731,6 +731,12 @@ def _historical_source_probe() -> None:
                     "GARMIN_HISTORY_PROBE kind=%s date=%s response=dict present_fields=%s",
                     kind, d, ",".join(present) or "NONE",
                 )
+                log.info(
+                    "GARMIN_HISTORY_PROBE_DETAIL kind=%s date=%s wellness=%s activity=%s steps=%s min_hr=%s max_hr=%s sleep_s=%s walk_m=%s",
+                    kind, d, data.get("includesWellnessData"), data.get("includesActivityData"),
+                    data.get("totalSteps"), data.get("minHeartRate"), data.get("maxHeartRate"),
+                    data.get("sleepingSeconds"), data.get("wellnessDistanceMeters"),
+                )
             else:
                 weight_list = data.get("dateWeightList")
                 if not isinstance(weight_list, list):
