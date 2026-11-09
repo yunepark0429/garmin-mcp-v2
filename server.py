@@ -120,10 +120,38 @@ async def _fetch_range(fn, days: list[str], key: str) -> list[dict[str, Any]]:
 
 
 def _safe_optional(fn, *args, **kwargs) -> dict[str, Any]:
+    """Preserve legacy ok/data/error while exposing source completeness.
+
+    A successful API call can legitimately return None, {} or [].
+    These are not proof of data completeness and must never be marked DATA.
+    """
     try:
-        return {"ok": True, "data": fn(*args, **kwargs), "error": None}
+        data = fn(*args, **kwargs)
+        if isinstance(data, dict) and data.get("error") and not any(
+            value for key, value in data.items() if key != "error"
+        ):
+            return {
+                "ok": False,
+                "data": None,
+                "error": str(data["error"]),
+                "source_status": "ERROR",
+            }
+        is_empty = data is None or (
+            isinstance(data, (dict, list, tuple, str)) and len(data) == 0
+        )
+        return {
+            "ok": True,
+            "data": data,
+            "error": None,
+            "source_status": "SOURCE_EMPTY" if is_empty else "DATA",
+        }
     except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "data": None, "error": str(exc)}
+        return {
+            "ok": False,
+            "data": None,
+            "error": str(exc),
+            "source_status": "ERROR",
+        }
 
 
 auth_token = os.environ.get("MCP_BEARER_TOKEN")
